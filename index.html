@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+    <title>WebSocket Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; display: flex; flex-direction: column; }
+        #inputArea { margin-top: 10px; display: none; }
+        #messageInput { width: 80%; }
+        #sendButton { width: 18%; }
+        .message { padding: 5px 10px; margin: 5px; border-radius: 5px; max-width: 70%; }
+        .message.received { background-color: #e1ffc7; align-self: flex-start; }
+        .message.sent { background-color: #d1e7ff; align-self: flex-end; text-align: right; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<h1>logx Chat Application</h1>
+<div id="initialArea">
+    <button id="createButton">Create Meeting</button>
+    <button id="joinButton">Join Meeting</button>
+</div>
+<div id="codeArea" class="hidden">
+    <input type="text" id="codeInput" placeholder="Enter code here" />
+    <button id="connectButton">Connect</button>
+</div>
+<div id="chat" class="hidden"></div>
+<div id="inputArea">
+    <input type="text" id="messageInput" placeholder="Enter message here" />
+    <button id="sendButton">Send</button>
+</div>
+
+<script>
+    var socket;
+    var chat = document.getElementById("chat");
+    var initialArea = document.getElementById("initialArea");
+    var codeArea = document.getElementById("codeArea");
+    var codeInput = document.getElementById("codeInput");
+    var connectButton = document.getElementById("connectButton");
+    var messageInput = document.getElementById("messageInput");
+    var sendButton = document.getElementById("sendButton");
+    var inputArea = document.getElementById("inputArea");
+    var isCreating = false;
+
+    document.getElementById("createButton").addEventListener("click", function() {
+        isCreating = true;
+        initialArea.classList.add("hidden");
+        codeArea.classList.remove("hidden");
+    });
+
+    document.getElementById("joinButton").addEventListener("click", function() {
+        isCreating = false;
+        initialArea.classList.add("hidden");
+        codeArea.classList.remove("hidden");
+    });
+
+    connectButton.addEventListener("click", function() {
+        var code = codeInput.value;
+        if (code) {
+            socket = new WebSocket("ws://localhost:8080/LuffyChat/websocketendpoint");
+
+            socket.onopen = function() {
+                console.log("WebSocket connection established.");
+                socket.send(JSON.stringify({ type: isCreating ? "create" : "join", code: code }));
+            };
+
+            socket.onmessage = function(event) {
+                console.log("Message received:", event.data);
+                var data = JSON.parse(event.data);
+                if (data.type === "system") {
+                    displayMessage(data.message, "received");
+                    if (data.message.startsWith("Connected")) {
+                        codeArea.classList.add("hidden");
+                        chat.classList.remove("hidden");
+                        inputArea.style.display = "block";
+                    }
+                } else if (data.type === "chat") {
+                    displayMessage(data.message, data.isSelf ? "sent" : "received");
+                }
+            };
+
+            socket.onclose = function() {
+                displayMessage("Connection closed.", "received");
+                inputArea.style.display = "none";
+            };
+
+            socket.onerror = function(error) {
+                console.error("WebSocket error:", error);
+                displayMessage("WebSocket error.", "received");
+                inputArea.style.display = "none";
+            };
+        }
+    });
+
+    sendButton.addEventListener("click", function() {
+        var message = messageInput.value;
+        if (message && socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "chat", message: message }));
+            messageInput.value = ""; 
+        }
+    });
+
+    function displayMessage(message, type) {
+        var div = document.createElement("div");
+        div.textContent = message;
+        div.classList.add("message", type);
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+    }
+</script>
+
+</body>
+</html>
